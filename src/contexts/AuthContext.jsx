@@ -8,7 +8,7 @@ export const AuthProvider = ({ children }) => {
     const [profile, setProfile] = useState(null)
     const [loading, setLoading] = useState(true)
 
-    const fetchProfile = async (id) => {
+    const fetchProfile = async (id, retries = 3) => {
         try {
             const { data, error } = await supabase
                 .from('profiles')
@@ -16,12 +16,26 @@ export const AuthProvider = ({ children }) => {
                 .eq('id', id)
                 .single()
 
-            if (error) throw error
+            if (error) {
+                if (retries > 0 && (error.code === 'PGRST116' || error.message.includes('JSON'))) {
+                    console.warn(`Profile not found for ${id}, retrying... (${retries} left)`)
+                    await new Promise(resolve => setTimeout(resolve, 1500))
+                    return fetchProfile(id, retries - 1)
+                }
+                throw error
+            }
             setProfile(data)
         } catch (error) {
             console.error('Error fetching profile:', error.message)
         } finally {
             setLoading(false)
+        }
+    }
+
+    const refreshProfile = () => {
+        if (user) {
+            setLoading(true)
+            fetchProfile(user.id)
         }
     }
 
@@ -53,7 +67,7 @@ export const AuthProvider = ({ children }) => {
     const signOut = () => supabase.auth.signOut()
 
     return (
-        <AuthContext.Provider value={{ user, profile, loading, signOut }}>
+        <AuthContext.Provider value={{ user, profile, loading, signOut, refreshProfile }}>
             {children}
         </AuthContext.Provider>
     )

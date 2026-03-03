@@ -7,10 +7,11 @@ import MapPicker from '../components/MapPicker'
 import { motion } from 'framer-motion'
 
 export default function CreateRide() {
-    const { user, profile, loading: authLoading } = useAuth()
+    const { user, profile, loading: authLoading, refreshProfile } = useAuth()
     const navigate = useNavigate()
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
+    const [profileError, setProfileError] = useState(false)
 
     const [formData, setFormData] = useState({
         source: '',
@@ -45,7 +46,8 @@ export default function CreateRide() {
         e.preventDefault()
 
         if (!profile) {
-            setError('Your user profile was not found. Please try logging out and back in to sync your profile, or check your Supabase "profiles" table.')
+            setError('Your user profile was not found. This might be a temporary sync issue.')
+            setProfileError(true)
             return
         }
 
@@ -121,7 +123,19 @@ export default function CreateRide() {
                         <div className="flex items-center gap-4">
                             <Info size={20} /> {error}
                         </div>
-                        {error.includes('profile might be missing') && (
+                        {profileError && (
+                            <button
+                                onClick={() => {
+                                    setError('')
+                                    setProfileError(false)
+                                    refreshProfile()
+                                }}
+                                className="w-fit ml-9 mt-2 px-6 py-2 bg-rydset-600 text-white rounded-xl text-sm font-bold hover:bg-rydset-700 transition-all shadow-lg shadow-rydset-600/10"
+                            >
+                                Retry Loading Profile
+                            </button>
+                        )}
+                        {typeof error === 'string' && error.includes('profile might be missing') && (
                             <p className="pl-9 font-medium text-red-500/80 italic text-xs">
                                 Tip: Run the updated SQL from `schema.sql` in your Supabase SQL Editor.
                             </p>

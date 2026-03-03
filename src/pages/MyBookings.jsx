@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { Calendar, Clock, MapPin, IndianRupee, CreditCard, ChevronRight, X, Loader2, CheckCircle2, User, Phone, Map, ShieldCheck, Mail } from 'lucide-react'
+import { Calendar, Clock, MapPin, IndianRupee, CreditCard, ChevronRight, X, Loader2, CheckCircle2, User, Phone, Map, ShieldCheck, Mail, Star } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import RatingModal from '../components/RatingModal'
+
 
 export default function MyBookings() {
     const { user } = useAuth()
     const [bookings, setBookings] = useState([])
     const [loading, setLoading] = useState(true)
     const [processingId, setProcessingId] = useState(null)
+    const [ratingBooking, setRatingBooking] = useState(null)
+
 
     useEffect(() => {
         if (user) fetchBookings()
@@ -99,8 +103,10 @@ export default function MyBookings() {
                             booking={booking}
                             onCancel={() => cancelBooking(booking.id)}
                             onPay={() => handlePayment(booking.id)}
+                            onRate={() => setRatingBooking(booking)}
                             isProcessing={processingId === booking.id}
                         />
+
                     ))}
                     {bookings.length === 0 && (
                         <motion.div
@@ -117,11 +123,26 @@ export default function MyBookings() {
                     )}
                 </div>
             )}
+            {/* Rating Modal */}
+            <AnimatePresence>
+                {ratingBooking && (
+                    <RatingModal
+                        booking={ratingBooking}
+                        onClose={() => setRatingBooking(null)}
+                        onSuccess={() => {
+                            setRatingBooking(null)
+                            fetchBookings()
+                            alert('Thank you for your feedback!')
+                        }}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     )
 }
 
-function BookingCard({ booking, onCancel, onPay, isProcessing }) {
+
+function BookingCard({ booking, onCancel, onPay, isProcessing, onRate }) {
     const { ride } = booking
     const date = new Date(ride.departure_time).toLocaleDateString(undefined, {
         weekday: 'short',
@@ -249,6 +270,15 @@ function BookingCard({ booking, onCancel, onPay, isProcessing }) {
                             </button>
                         )}
 
+                        {isPaid && (
+                            <button
+                                onClick={onRate}
+                                className="w-full h-14 bg-white hover:bg-rydset-50 text-rydset-600 rounded-2xl font-black text-sm flex items-center justify-center gap-2 border-2 border-rydset-100 active:scale-95 transition-all shadow-sm"
+                            >
+                                <Star size={18} className="fill-accent text-accent" /> Rate This Trip
+                            </button>
+                        )}
+
                         <button
                             onClick={onCancel}
                             disabled={isProcessing || isPaid}
@@ -263,3 +293,4 @@ function BookingCard({ booking, onCancel, onPay, isProcessing }) {
         </motion.div>
     )
 }
+
