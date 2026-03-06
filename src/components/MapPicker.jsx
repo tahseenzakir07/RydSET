@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, useMapEvents, Polyline } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, useMapEvents, Polyline, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet-routing-machine/dist/leaflet-routing-machine.css'
@@ -17,11 +17,23 @@ let DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon
 
-export default function MapPicker({ onSourceChange, onDestinationChange, initialSource, initialDestination }) {
+export default function MapPicker({ onSourceChange, onDestinationChange, onRouteUpdate, initialSource, initialDestination }) {
     const [source, setSource] = useState(initialSource || null)
     const [destination, setDestination] = useState(initialDestination || null)
     const [route, setRoute] = useState([])
     const [distance, setDistance] = useState(0)
+
+    useEffect(() => {
+        if (initialSource && (initialSource.lat !== source?.lat || initialSource.lng !== source?.lng)) {
+            setSource(initialSource)
+        }
+    }, [initialSource])
+
+    useEffect(() => {
+        if (initialDestination && (initialDestination.lat !== destination?.lat || initialDestination.lng !== destination?.lng)) {
+            setDestination(initialDestination)
+        }
+    }, [initialDestination])
 
     // Kerala / Kochi center
     const center = [9.9312, 76.2673]
@@ -47,12 +59,7 @@ export default function MapPicker({ onSourceChange, onDestinationChange, initial
             },
         })
 
-        return (
-            <>
-                {source && <Marker position={source}><L.Tooltip permanent direction="top">Source</L.Tooltip></Marker>}
-                {destination && <Marker position={destination}><L.Tooltip permanent direction="top">Destination</L.Tooltip></Marker>}
-            </>
-        )
+        return null
     }
 
     useEffect(() => {
@@ -67,9 +74,11 @@ export default function MapPicker({ onSourceChange, onDestinationChange, initial
             const resp = await fetch(`https://router.project-osrm.org/route/v1/driving/${source.lng},${source.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson`)
             const data = await resp.json()
             if (data.routes && data.routes[0]) {
-                const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]])
+                const coords = data.routes[0].geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }))
                 setRoute(coords)
-                setDistance(data.routes[0].distance / 1000) // KM
+                const dist = data.routes[0].distance / 1000
+                setDistance(dist) // KM
+                if (onRouteUpdate) onRouteUpdate({ coords, distance: dist })
             }
         } catch (err) {
             console.error("Route calculation error:", err)
@@ -84,9 +93,17 @@ export default function MapPicker({ onSourceChange, onDestinationChange, initial
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
-                    {source && <Marker position={source}><L.Tooltip permanent direction="top">Source</L.Tooltip></Marker>}
-                    {destination && <Marker position={destination}><L.Tooltip permanent direction="top">Destination</L.Tooltip></Marker>}
-                    {route.length > 0 && <Polyline positions={route} color="#152822" weight={4} opacity={0.8} />}
+                    {source && (
+                        <Marker position={source}>
+                            <Tooltip permanent direction="top">Source</Tooltip>
+                        </Marker>
+                    )}
+                    {destination && (
+                        <Marker position={destination}>
+                            <Tooltip permanent direction="top">Destination</Tooltip>
+                        </Marker>
+                    )}
+                    {route.length > 0 && <Polyline positions={route.map(p => [p.lat, p.lng])} color="#152822" weight={4} opacity={0.8} />}
                     <LocationMarker />
                 </MapContainer>
             </div>

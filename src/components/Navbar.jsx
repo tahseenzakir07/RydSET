@@ -53,7 +53,7 @@ export default function Navbar() {
                         </>
                     ) : (
                         <Link to="/login" className="btn-primary !h-12 !px-8 !py-0 !text-sm">
-                            Join Community
+                            Start Sharing
                         </Link>
                     )}
                 </div>

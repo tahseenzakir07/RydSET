@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { auth, db } from '../lib/firebase'
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { MapPin, Calendar, Clock, Armchair, Car, Info, Loader2, IndianRupee, ArrowRight, Sparkles, Navigation } from 'lucide-react'
 import MapPicker from '../components/MapPicker'
+import LocationInput from '../components/LocationInput'
 import { motion } from 'framer-motion'
 
 export default function CreateRide() {
@@ -25,7 +27,9 @@ export default function CreateRide() {
         vehicle_type: 'Car',
         seats_available: 3,
         price_per_km: 10,
-        notes: ''
+        notes: '',
+        route: [],
+        route_distance: 0
     })
 
     const handleChange = (e) => {
@@ -70,29 +74,25 @@ export default function CreateRide() {
                 throw new Error('Departure time cannot be in the past.')
             }
 
-            const { error } = await supabase
-                .from('rides')
-                .insert({
-                    driver_id: user.id,
-                    source: formData.source,
-                    destination: formData.destination,
-                    from_lat: finalizedFromLat,
-                    from_lng: finalizedFromLng,
-                    to_lat: finalizedToLat,
-                    to_lng: finalizedToLng,
-                    departure_time: departureDatetime.toISOString(),
-                    vehicle_type: formData.vehicle_type,
-                    seats_available: parseInt(formData.seats_available),
-                    price_per_km: parseFloat(formData.price_per_km),
-                    notes: formData.notes
-                })
-
-            if (error) {
-                if (error.code === '42501') {
-                    throw new Error('Permission Denied: Your profile might be missing in the database. Please see the "Troubleshooting" guide.')
-                }
-                throw error
-            }
+            const docRef = await addDoc(collection(db, 'rides'), {
+                driver_id: user.uid,
+                driver_name: profile.name,
+                source: formData.source,
+                destination: formData.destination,
+                from_lat: finalizedFromLat,
+                from_lng: finalizedFromLng,
+                to_lat: finalizedToLat,
+                to_lng: finalizedToLng,
+                departure_time: departureDatetime.toISOString(),
+                vehicle_type: formData.vehicle_type,
+                seats_available: parseInt(formData.seats_available),
+                price_per_km: parseFloat(formData.price_per_km),
+                notes: formData.notes,
+                route: formData.route || [],
+                route_distance: formData.route_distance || 0,
+                status: 'planned',
+                created_at: serverTimestamp()
+            })
             navigate('/dashboard')
         } catch (err) {
             setError(err.message)
@@ -135,9 +135,9 @@ export default function CreateRide() {
                                 Retry Loading Profile
                             </button>
                         )}
-                        {typeof error === 'string' && error.includes('profile might be missing') && (
+                        {profileError && (
                             <p className="pl-9 font-medium text-red-500/80 italic text-xs">
-                                Tip: Run the updated SQL from `schema.sql` in your Supabase SQL Editor.
+                                Tip: Ensure your Firestore Security Rules are published in the Firebase Console.
                             </p>
                         )}
                     </div>
@@ -154,34 +154,43 @@ export default function CreateRide() {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="group">
-                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block group-focus-within:text-rydset-500 transition-colors">Start Location</label>
-                                <input
-                                    type="text"
-                                    name="source"
-                                    placeholder="Enter Landmark/Point"
-                                    required
-                                    className="input-field !h-16 !px-8 !rounded-[2rem] !bg-slate-50 border-transparent focus:!bg-white focus:!border-accent/30 focus:!ring-accent/5 transition-all font-bold"
-                                    onChange={handleChange}
-                                />
-                            </div>
-                            <div className="group">
-                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block group-focus-within:text-rydset-500 transition-colors">End Location</label>
-                                <input
-                                    type="text"
-                                    name="destination"
-                                    placeholder="Enter Landmark/Point"
-                                    required
-                                    className="input-field !h-16 !px-8 !rounded-[2rem] !bg-slate-50 border-transparent focus:!bg-white focus:!border-accent/30 focus:!ring-accent/5 transition-all font-bold"
-                                    onChange={handleChange}
-                                />
-                            </div>
+                            <LocationInput
+                                label="Start Location"
+                                placeholder="Enter Landmark/Point"
+                                value={formData.source}
+                                onChange={(val) => setFormData({ ...formData, source: val })}
+                                onSelect={({ name, lat, lon }) => {
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        source: name,
+                                        from_lat: lat,
+                                        from_lng: lon
+                                    }))
+                                }}
+                            />
+                            <LocationInput
+                                label="End Location"
+                                placeholder="Enter Landmark/Point"
+                                value={formData.destination}
+                                onChange={(val) => setFormData({ ...formData, destination: val })}
+                                onSelect={({ name, lat, lon }) => {
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        destination: name,
+                                        to_lat: lat,
+                                        to_lng: lon
+                                    }))
+                                }}
+                            />
                         </div>
 
                         <div className="rounded-[2.5rem] overflow-hidden border-4 border-slate-50 shadow-inner grayscale-[0.2] hover:grayscale-0 transition-all duration-500">
                             <MapPicker
+                                initialSource={formData.from_lat ? { lat: formData.from_lat, lng: formData.from_lng } : null}
+                                initialDestination={formData.to_lat ? { lat: formData.to_lat, lng: formData.to_lng } : null}
                                 onSourceChange={(latlng) => handleLocationChange('from', latlng)}
                                 onDestinationChange={(latlng) => handleLocationChange('to', latlng)}
+                                onRouteUpdate={({ coords, distance }) => setFormData(prev => ({ ...prev, route: coords, route_distance: distance }))}
                             />
                         </div>
                     </div>

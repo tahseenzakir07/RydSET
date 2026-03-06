@@ -42,9 +42,6 @@ export default function Home() {
                                 <Link to="/dashboard" className="h-20 px-14 bg-rydset-600 text-white rounded-[2rem] text-xl font-black flex items-center justify-center gap-3 hover:bg-rydset-700 transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-rydset-600/10 group">
                                     Start Sharing <ArrowRight className="group-hover:translate-x-2 transition-transform" size={24} />
                                 </Link>
-                                <Link to="/login" className="h-20 px-14 bg-white text-rydset-600 rounded-[2rem] text-xl font-black flex items-center justify-center gap-3 hover:bg-rydset-50 transition-all border-2 border-slate-100 shadow-sm">
-                                    Join Community
-                                </Link>
                             </div>
                         </motion.div>
                     </div>

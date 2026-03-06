@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react'
-import { supabase, checkSupabaseConnection } from '../lib/supabase'
+import { auth, db } from '../lib/firebase'
+import {
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    sendEmailVerification
+} from 'firebase/auth'
+import { doc, setDoc } from 'firebase/firestore'
 import { useNavigate } from 'react-router-dom'
-import { Mail, Lock, User, Phone, School, Loader2, Info, CheckCircle2, WifiOff } from 'lucide-react'
+import { Mail, Lock, User, Phone, School, Loader2, Info, CheckCircle2, Wifi } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 export default function Login() {
@@ -9,22 +15,8 @@ export default function Login() {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
-    const [isOnline, setIsOnline] = useState(true)
     const navigate = useNavigate()
 
-    useEffect(() => {
-        verifyConnection()
-    }, [])
-
-    const verifyConnection = async () => {
-        setLoading(true)
-        const connected = await checkSupabaseConnection()
-        setIsOnline(connected)
-        setLoading(false)
-        if (!connected) {
-            console.error('Supabase connection check failed. Possible ISP block.')
-        }
-    }
 
     const [formData, setFormData] = useState({
         email: '',
@@ -42,14 +34,6 @@ export default function Login() {
     const handleAuth = async (e) => {
         e.preventDefault()
 
-        // Re-verify connection before attempting auth
-        const connected = await checkSupabaseConnection()
-        setIsOnline(connected)
-        if (!connected) {
-            setError('Cannot reach Supabase. Please check your internet or try a VPN/Hotspot.')
-            return
-        }
-
         setLoading(true)
         setError('')
         setSuccess('')
@@ -61,58 +45,45 @@ export default function Login() {
                     throw new Error('Only @rajagiri.edu.in emails are permitted.')
                 }
 
-                const { data, error } = await supabase.auth.signUp({
+                const userCredential = await createUserWithEmailAndPassword(
+                    auth,
+                    formData.email,
+                    formData.password
+                )
+                const user = userCredential.user
+
+                // Create profile in Firestore
+                await setDoc(doc(db, 'profiles', user.uid), {
+                    name: formData.name,
                     email: formData.email,
-                    password: formData.password,
-                    options: {
-                        data: {
-                            name: formData.name,
-                            phone: formData.phone,
-                            department: formData.department,
-                            role: formData.role
-                        },
-                        emailRedirectTo: `${window.location.origin}/dashboard`
-                    }
+                    phone: formData.phone,
+                    department: formData.department,
+                    role: formData.role,
+                    created_at: new Date().toISOString()
                 })
 
-                console.log('SignUp Result:', { data, error })
-
-                if (error) {
-                    if (error.message.includes('User already registered')) {
-                        throw new Error('This email is already registered. If you haven\'t verified your email, please check your inbox (and spam) for the link.')
-                    }
-                    throw error
-                }
-
-                // If email confirmation is disabled, a session is returned immediately
-                if (data.session) {
-                    setSuccess('Account created! Logging you in...')
-                    setTimeout(() => navigate('/dashboard'), 1500)
-                } else {
-                    setSuccess('Account created! Please check your email for verification link.')
-                }
+                await sendEmailVerification(user)
+                setSuccess('Account created! Please check your email for verification link.')
             } else {
-                const { data, error } = await supabase.auth.signInWithPassword({
-                    email: formData.email,
-                    password: formData.password
-                })
-                console.log('SignIn Result:', { data, error })
-                if (error) {
-                    if (error.message.includes('Email not confirmed')) {
-                        throw new Error('Please verify your email before signing in. Check your inbox for the verification link.')
-                    }
-                    throw error
+                const userCredential = await signInWithEmailAndPassword(
+                    auth,
+                    formData.email,
+                    formData.password
+                )
+
+                if (!userCredential.user.emailVerified) {
+                    throw new Error('Please verify your email before signing in. Check your inbox for the verification link.')
                 }
+
                 console.log('Navigating to dashboard...')
                 navigate('/dashboard')
             }
         } catch (err) {
             console.error('Authentication error details:', err)
-            if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
-                setError('Network error (Failed to fetch). Supabase is being blocked by your network/ISP.')
-            } else {
-                setError(err.message)
-            }
+            let msg = err.message
+            if (err.code === 'auth/email-already-in-use') msg = 'This email is already registered.'
+            if (err.code === 'auth/invalid-credential') msg = 'Invalid email or password.'
+            setError(msg)
         } finally {
             setLoading(false)
         }
@@ -125,15 +96,12 @@ export default function Login() {
         }
         setLoading(true)
         try {
-            const { error } = await supabase.auth.resend({
-                type: 'signup',
-                email: formData.email,
-                options: {
-                    emailRedirectTo: `${window.location.origin}/dashboard`
-                }
-            })
-            if (error) throw error
-            setSuccess('Verification link resent! Please check your inbox.')
+            if (auth.currentUser) {
+                await sendEmailVerification(auth.currentUser)
+                setSuccess('Verification link resent! Please check your inbox.')
+            } else {
+                throw new Error('Please sign in first to resend verification.')
+            }
         } catch (err) {
             setError(err.message)
         } finally {
@@ -184,24 +152,6 @@ export default function Login() {
                     </div>
                 )}
 
-                {!isOnline && (
-                    <div className="bg-amber-50 border border-amber-100 text-amber-700 p-5 rounded-2xl mb-8 flex flex-col gap-2 text-sm font-bold">
-                        <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                                <WifiOff size={18} /> Supabase connection is blocked.
-                            </div>
-                            <button
-                                onClick={verifyConnection}
-                                className="px-4 py-1.5 bg-amber-200/50 hover:bg-amber-200 rounded-xl text-xs transition-colors"
-                            >
-                                Retry Connection
-                            </button>
-                        </div>
-                        <p className="font-medium text-amber-600/80 pl-8 italic">
-                            Your ISP/Network is blocking Supabase. DNS (8.8.8.8) may not be enough. Try a **VPN** or **Mobile Hotspot**.
-                        </p>
-                    </div>
-                )}
 
                 <form onSubmit={handleAuth} className="space-y-8">
                     {isSignUp && (

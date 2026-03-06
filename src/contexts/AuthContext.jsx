@@ -1,5 +1,7 @@
 import { useState, useEffect, createContext, useContext } from 'react'
-import { supabase } from '../lib/supabase'
+import { auth, db } from '../lib/firebase'
+import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth'
+import { doc, getDoc } from 'firebase/firestore'
 
 const AuthContext = createContext({})
 
@@ -8,23 +10,21 @@ export const AuthProvider = ({ children }) => {
     const [profile, setProfile] = useState(null)
     const [loading, setLoading] = useState(true)
 
-    const fetchProfile = async (id, retries = 3) => {
+    const fetchProfile = async (uid, retries = 3) => {
         try {
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', id)
-                .single()
+            const docRef = doc(db, 'profiles', uid)
+            const docSnap = await getDoc(docRef)
 
-            if (error) {
-                if (retries > 0 && (error.code === 'PGRST116' || error.message.includes('JSON'))) {
-                    console.warn(`Profile not found for ${id}, retrying... (${retries} left)`)
-                    await new Promise(resolve => setTimeout(resolve, 1500))
-                    return fetchProfile(id, retries - 1)
+            if (!docSnap.exists()) {
+                if (retries > 0) {
+                    console.warn(`Profile not found for ${uid}, retrying... (${retries} left)`)
+                    await new Promise(resolve => setTimeout(resolve, 2000))
+                    return fetchProfile(uid, retries - 1)
                 }
-                throw error
+                setProfile(null)
+            } else {
+                setProfile({ id: docSnap.id, ...docSnap.data() })
             }
-            setProfile(data)
         } catch (error) {
             console.error('Error fetching profile:', error.message)
         } finally {
@@ -35,36 +35,25 @@ export const AuthProvider = ({ children }) => {
     const refreshProfile = () => {
         if (user) {
             setLoading(true)
-            fetchProfile(user.id)
+            fetchProfile(user.uid)
         }
     }
 
     useEffect(() => {
-        // Check active sessions and sets the user
-        supabase.auth.getSession().then(({ data, error }) => {
-            if (error) console.error("Session fetch error:", error)
-            const session = data?.session
-            setUser(session?.user ?? null)
-            if (session?.user) fetchProfile(session.user.id)
-            else setLoading(false)
-        })
-
-        // Listen for changes on auth state (logged in, signed out, etc.)
-        const { data } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            setUser(session?.user ?? null)
-            if (session?.user) fetchProfile(session.user.id)
-            else {
+        const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+            setUser(firebaseUser)
+            if (firebaseUser) {
+                fetchProfile(firebaseUser.uid)
+            } else {
                 setProfile(null)
                 setLoading(false)
             }
         })
 
-        const subscription = data?.subscription
-
-        return () => subscription?.unsubscribe()
+        return unsubscribe
     }, [])
 
-    const signOut = () => supabase.auth.signOut()
+    const signOut = () => firebaseSignOut(auth)
 
     return (
         <AuthContext.Provider value={{ user, profile, loading, signOut, refreshProfile }}>

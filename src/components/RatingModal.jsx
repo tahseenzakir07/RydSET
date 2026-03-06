@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { db } from '../lib/firebase'
+import { collection, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Star, X, Send, Loader2, MessageSquare, ShieldCheck } from 'lucide-react'
 
@@ -20,19 +21,27 @@ export default function RatingModal({ booking, onClose, onSuccess }) {
         setError('')
 
         try {
-            const { error } = await supabase
-                .from('ratings')
-                .insert({
-                    booking_id: booking.id,
-                    rater_id: booking.passenger_id,
-                    ratee_id: booking.ride.driver_id || booking.ride.driver.id,
-                    rating: rating,
-                    comment: comment
-                })
+            await addDoc(collection(db, 'ratings'), {
+                booking_id: booking.id,
+                rater_id: booking.passenger_id,
+                ratee_id: booking.ride.driver_id || (booking.ride.driver && booking.ride.driver.uid) || booking.ride.driver_id,
+                rating: rating,
+                comment: comment,
+                created_at: serverTimestamp()
+            })
 
-            if (error) {
-                if (error.code === '23505') throw new Error('You have already rated this trip.')
-                throw error
+            // Mark booking as rated
+            await updateDoc(doc(db, 'bookings', booking.id), { rated: true })
+
+            // Flag driver if rating is less than 3 stars
+            if (rating < 3) {
+                const driverId = booking.ride.driver_id || (booking.ride.driver && booking.ride.driver.uid)
+                if (driverId) {
+                    await updateDoc(doc(db, 'profiles', driverId), {
+                        flagged: true,
+                        flagged_reason: 'Low rating received'
+                    })
+                }
             }
 
             onSuccess()
@@ -81,8 +90,8 @@ export default function RatingModal({ booking, onClose, onSuccess }) {
                                 <Star
                                     size={42}
                                     className={`${(hover || rating) >= star
-                                            ? 'fill-accent text-accent'
-                                            : 'text-slate-200'
+                                        ? 'fill-accent text-accent'
+                                        : 'text-slate-200'
                                         } transition-colors`}
                                 />
                             </button>
