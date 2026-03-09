@@ -213,12 +213,13 @@ export default function MyBookings() {
         try {
             // 1. Update the Ride document first
             try {
-                console.log(`Updating ride ${rideId} to status: ${newStatus}`)
+                console.log(`Updating ride ${rideId} to status: ${newStatus} at ${new Date().toISOString()}`)
                 await updateDoc(doc(db, 'rides', rideId), {
                     status: newStatus,
                     ...(newStatus === 'started' ? { started_at: new Date().toISOString() } : {}),
                     ...(newStatus === 'completed' ? { ended_at: new Date().toISOString() } : {})
                 })
+                console.log(`Successfully updated ride ${rideId} to ${newStatus}`)
             } catch (rideError) {
                 console.error("Permission error updating RIDE document:", rideError)
                 alert(`Access Denied: You don't have permission to update this ride's status. (${rideError.message})`)
@@ -732,45 +733,52 @@ function RideOfferCard({ ride, onStart, onEnd, onCancel, isProcessing, activeBoo
                     </div>
                 )}
 
-                {!isCompleted && !isCancelled && (
-                    <div className="mt-8 space-y-4">
-                        <div className="flex flex-wrap gap-4">
-                            {isPlanned && (
-                                <>
-                                    <button
-                                        onClick={onStart}
-                                        disabled={isProcessing}
-                                        className="px-8 h-14 bg-rydset-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-rydset-600/20 flex items-center gap-3 hover:bg-rydset-700 transition-all active:scale-95"
-                                    >
-                                        {isProcessing ? <Loader2 className="animate-spin" /> : <><Play size={20} /> Start Ride</>}
-                                    </button>
-                                    <button
-                                        onClick={onCancel}
-                                        disabled={isProcessing}
-                                        className="px-8 h-14 bg-white text-red-500 border border-red-100 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center gap-3 hover:bg-red-50 transition-all active:scale-95"
-                                    >
-                                        {isProcessing ? <Loader2 className="animate-spin" /> : <><Ban size={20} /> Cancel Ride</>}
-                                    </button>
-                                </>
-                            )}
-                            {isStarted && (
+                <div className="mt-8 space-y-4">
+                    <div className="flex flex-wrap gap-4">
+                        {isPlanned ? (
+                            <>
                                 <button
-                                    onClick={onEnd}
-                                    disabled={isProcessing || activeBookingsCount > 0}
-                                    className={`px-8 h-14 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center gap-3 transition-all ${activeBookingsCount > 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-red-500 text-white shadow-lg shadow-red-500/20 hover:bg-red-600 active:scale-95'}`}
+                                    onClick={onStart}
+                                    disabled={isProcessing}
+                                    className="px-8 h-14 bg-rydset-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-rydset-600/20 flex items-center gap-3 hover:bg-rydset-700 transition-all active:scale-95"
                                 >
-                                    {isProcessing ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={20} /> End Ride</>}
+                                    {isProcessing ? <Loader2 className="animate-spin" /> : <><Play size={20} /> Start Ride</>}
                                 </button>
-                            )}
-                        </div>
-
-                        {isStarted && activeBookingsCount > 0 && (
-                            <p className="text-xs font-bold text-orange-500 flex items-center gap-2">
-                                <Info size={14} /> Please drop off all passengers (currently {activeBookingsCount}) before ending the ride.
-                            </p>
-                        )}
+                                <button
+                                    onClick={onCancel}
+                                    disabled={isProcessing}
+                                    className="px-8 h-14 bg-white text-red-500 border border-red-100 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center gap-3 hover:bg-red-50 transition-all active:scale-95"
+                                >
+                                    {isProcessing ? <Loader2 className="animate-spin" /> : <><Ban size={20} /> Cancel Ride</>}
+                                </button>
+                            </>
+                        ) : isStarted ? (
+                            <button
+                                onClick={onEnd}
+                                disabled={isProcessing || activeBookingsCount > 0}
+                                className={`px-8 h-14 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center gap-3 transition-all ${activeBookingsCount > 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-red-500 text-white shadow-lg shadow-red-500/20 hover:bg-red-600 active:scale-95'}`}
+                            >
+                                {isProcessing ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={20} /> End Ride</>}
+                            </button>
+                        ) : isCompleted ? (
+                            <div className="flex items-center gap-3 px-6 py-3 bg-slate-50 border border-slate-100 rounded-2xl">
+                                <CheckCircle2 size={20} className="text-green-500" />
+                                <span className="font-black text-xs uppercase tracking-widest text-slate-400">Ride Status: Completed</span>
+                            </div>
+                        ) : isCancelled ? (
+                            <div className="flex items-center gap-3 px-6 py-3 bg-red-50 border border-red-100 rounded-2xl">
+                                <Ban size={20} className="text-red-500" />
+                                <span className="font-black text-xs uppercase tracking-widest text-red-400">Ride Status: Cancelled</span>
+                            </div>
+                        ) : null}
                     </div>
-                )}
+
+                    {isStarted && activeBookingsCount > 0 && (
+                        <p className="text-xs font-bold text-orange-500 flex items-center gap-2">
+                            <Info size={14} /> Please drop off all passengers (currently {activeBookingsCount}) before ending the ride.
+                        </p>
+                    )}
+                </div>
             </div>
         </motion.div>
     )

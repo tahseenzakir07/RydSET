@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Navbar from './components/Navbar'
+import MobileNav from './components/MobileNav'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -19,7 +20,7 @@ function App() {
             <Router>
                 <div className="min-h-screen">
                     <Navbar />
-                    <main className="container mx-auto px-4 py-8">
+                    <main className="container mx-auto px-4 py-8 pb-32 lg:pb-8">
                         <Routes>
                             <Route path="/" element={<Home />} />
                             <Route path="/login" element={<Login />} />
@@ -34,6 +35,7 @@ function App() {
                             } />
                         </Routes>
                     </main>
+                    <MobileNav />
                 </div>
             </Router>
         </AuthProvider>
