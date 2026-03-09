@@ -120,7 +120,9 @@ export default function Dashboard() {
 
         let matchDate = true
         if (filters.date) {
-            const rideDate = new Date(ride.departure_time).toISOString().split('T')[0]
+            // Use local date (YYYY-MM-DD) instead of UTC toISOString()
+            const d = new Date(ride.departure_time)
+            const rideDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
             matchDate = rideDate === filters.date
         }
 
