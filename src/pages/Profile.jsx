@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { db } from '../lib/firebase'
-import { doc, updateDoc } from 'firebase/firestore'
+import { doc, updateDoc, collection, query, where, getDocs, orderBy, getDoc } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
-import { User, ShieldCheck, Mail, Loader2, Car, Image as ImageIcon, ChevronRight, Hash, CheckCircle2, Clock, XCircle, Star } from 'lucide-react'
+import { User, ShieldCheck, Mail, Loader2, Car, Image as ImageIcon, ChevronRight, Hash, CheckCircle2, Clock, XCircle, Star, MessageSquare, Quote } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export default function Profile() {
@@ -10,6 +10,8 @@ export default function Profile() {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
+    const [reviews, setReviews] = useState([])
+    const [reviewsLoading, setReviewsLoading] = useState(true)
 
     const [formData, setFormData] = useState({
         vehicle_model: '',
@@ -17,6 +19,48 @@ export default function Profile() {
         license_number: '',
         vehicle_image_url: ''
     })
+
+    useEffect(() => {
+        if (user?.uid) {
+            fetchReviews(user.uid)
+        }
+    }, [user])
+
+    const fetchReviews = async (uid) => {
+        setReviewsLoading(true)
+        try {
+            const q = query(
+                collection(db, 'ratings'),
+                where('ratee_id', '==', uid)
+            )
+            const snapshot = await getDocs(q)
+            const rawReviews = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+
+            // Fetch rater names
+            const enriched = await Promise.all(rawReviews.map(async (r) => {
+                try {
+                    const raterSnap = await getDoc(doc(db, 'profiles', r.rater_id))
+                    const raterName = raterSnap.exists() ? raterSnap.data().name : 'Anonymous'
+                    return { ...r, rater_name: raterName }
+                } catch {
+                    return { ...r, rater_name: 'Anonymous' }
+                }
+            }))
+
+            // Sort by created_at desc (client-side since no index needed)
+            enriched.sort((a, b) => {
+                const aTime = a.created_at?.toMillis ? a.created_at.toMillis() : new Date(a.created_at).getTime()
+                const bTime = b.created_at?.toMillis ? b.created_at.toMillis() : new Date(b.created_at).getTime()
+                return bTime - aTime
+            })
+
+            setReviews(enriched)
+        } catch (err) {
+            console.error('Failed to fetch reviews:', err)
+        } finally {
+            setReviewsLoading(false)
+        }
+    }
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -43,7 +87,7 @@ export default function Profile() {
                 driver_status: newStatus
             })
             setSuccess(isAutoApprove ? 'Vehicle details saved and verified!' : 'Registration submitted successfully! Please wait for admin approval.')
-            refreshProfile() // Refresh local profile context to get new status
+            refreshProfile()
         } catch (err) {
             setError(err.message)
         } finally {
@@ -88,6 +132,12 @@ export default function Profile() {
                     </div>
                 )
         }
+    }
+
+    const formatDate = (ts) => {
+        if (!ts) return ''
+        const d = ts?.toDate ? ts.toDate() : new Date(ts)
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
     }
 
     return (
@@ -258,6 +308,83 @@ export default function Profile() {
                      </div>
                  </div>
             )}
+
+            {/* ── My Reviews Section ── */}
+            <div className="bg-white p-8 md:p-12 rounded-[3.5rem] shadow-xl shadow-rydset-900/5 border border-rydset-50/50">
+                <div className="flex items-center gap-4 mb-8">
+                    <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500">
+                        <MessageSquare size={24} />
+                    </div>
+                    <div>
+                        <h3 className="text-2xl font-black text-slate-900 tracking-tight">My Reviews</h3>
+                        <p className="text-slate-500 font-medium text-sm">What others say about riding with you</p>
+                    </div>
+                </div>
+
+                {reviewsLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                        <Loader2 className="animate-spin text-rydset-600" size={32} />
+                    </div>
+                ) : reviews.length === 0 ? (
+                    <div className="py-12 text-center bg-slate-50 rounded-[2rem] border border-slate-100">
+                        <div className="w-16 h-16 bg-white border border-slate-100 rounded-[1.5rem] flex items-center justify-center text-slate-200 mx-auto mb-4">
+                            <Star size={32} />
+                        </div>
+                        <p className="font-black text-slate-400 uppercase tracking-widest text-xs">No reviews yet</p>
+                        <p className="text-slate-400 text-sm mt-1">Complete rides to start collecting reviews.</p>
+                    </div>
+                ) : (
+                    <div className="space-y-5">
+                        {reviews.map((review) => (
+                            <motion.div
+                                key={review.id}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="bg-slate-50 border border-slate-100 rounded-[2rem] p-6 flex flex-col gap-4"
+                            >
+                                {/* Header row: reviewer + stars + date */}
+                                <div className="flex items-start justify-between gap-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-rydset-50 rounded-xl flex items-center justify-center text-rydset-600 shrink-0">
+                                            <User size={20} />
+                                        </div>
+                                        <div>
+                                            <p className="font-black text-slate-800 leading-none">{review.rater_name}</p>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+                                                {review.role_rated === 'driver' ? 'Rated you as Driver' : 'Rated you as Passenger'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-1 shrink-0">
+                                        {/* Star row */}
+                                        <div className="flex gap-0.5">
+                                            {[1, 2, 3, 4, 5].map(s => (
+                                                <Star
+                                                    key={s}
+                                                    size={16}
+                                                    className={s <= review.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}
+                                                />
+                                            ))}
+                                        </div>
+                                        <p className="text-[10px] font-bold text-slate-400">{formatDate(review.created_at)}</p>
+                                    </div>
+                                </div>
+
+                                {/* Comment */}
+                                {review.comment && (
+                                    <div className="flex gap-3 bg-white rounded-2xl p-4 border border-slate-100">
+                                        <Quote size={18} className="text-rydset-300 shrink-0 mt-0.5" />
+                                        <p className="text-slate-600 font-medium leading-relaxed text-sm italic">{review.comment}</p>
+                                    </div>
+                                )}
+                                {!review.comment && (
+                                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest italic">No written review</p>
+                                )}
+                            </motion.div>
+                        ))}
+                    </div>
+                )}
+            </div>
         </motion.div>
     )
 }

@@ -9,6 +9,7 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null)
     const [profile, setProfile] = useState(null)
     const [loading, setLoading] = useState(true)
+    const [blockedError, setBlockedError] = useState(false)
 
     const fetchProfile = async (uid, retries = 3) => {
         try {
@@ -23,7 +24,18 @@ export const AuthProvider = ({ children }) => {
                 }
                 setProfile(null)
             } else {
-                setProfile({ id: docSnap.id, ...docSnap.data() })
+                const data = docSnap.data()
+
+                // If the user is blocked, sign them out immediately
+                if (data.is_blocked === true) {
+                    setBlockedError(true)
+                    await firebaseSignOut(auth)
+                    setProfile(null)
+                    return
+                }
+
+                setBlockedError(false)
+                setProfile({ id: docSnap.id, ...data })
             }
         } catch (error) {
             console.error('Error fetching profile:', error.message)
@@ -53,10 +65,13 @@ export const AuthProvider = ({ children }) => {
         return unsubscribe
     }, [])
 
-    const signOut = () => firebaseSignOut(auth)
+    const signOut = () => {
+        setBlockedError(false)
+        return firebaseSignOut(auth)
+    }
 
     return (
-        <AuthContext.Provider value={{ user, profile, loading, signOut, refreshProfile }}>
+        <AuthContext.Provider value={{ user, profile, loading, signOut, refreshProfile, blockedError }}>
             {children}
         </AuthContext.Provider>
     )

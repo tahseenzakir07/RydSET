@@ -3,65 +3,104 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if user is admin
+    // ── Helper Functions ──────────────────────────────────────────────────────
+
+    // Check if the requesting user is an admin
     function isAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin';
+      return request.auth != null &&
+        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // Check if the requesting user is NOT blocked
+    function isNotBlocked() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('is_blocked', false) == false;
+    }
+
+    // ── Profiles ──────────────────────────────────────────────────────────────
     match /profiles/{userId} {
-      // Anyone can read profiles
+      // Any authenticated user (or public) can read profiles
+      // (needed for fetching driver/passenger info in ride cards & review lookups)
       allow read: if true;
-      
-      // Users can create their own profile, or admins can create profiles
+
+      // Users can create only their own profile
       allow create: if request.auth != null && request.auth.uid == userId;
 
-      // Users can update their own profile, AND admins can update ANY profile
-      allow update: if (request.auth != null && request.auth.uid == userId) || isAdmin();
-      
-      allow delete: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      // Users can update their own profile (if not blocked),
+      // OR admins can update ANY profile (e.g. to set is_blocked, driver_status)
+      allow update: if (request.auth != null && request.auth.uid == userId && isNotBlocked())
+                    || isAdmin();
+
+      // Only admins can delete profiles
+      allow delete: if isAdmin();
     }
 
+    // ── Rides ─────────────────────────────────────────────────────────────────
     match /rides/{rideId} {
-      // Anyone can read rides
+      // Anyone can read rides (needed for Dashboard discovery)
       allow read: if true;
-      
-      // Authenticated users can create rides
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.driver_id;
-      
-      // Drivers can update/delete their own rides, or admins can
-      allow update, delete: if (request.auth != null && request.auth.uid == resource.data.driver_id) || isAdmin();
+
+      // Only non-blocked, authenticated users can create rides (as driver)
+      allow create: if isNotBlocked() &&
+                       request.auth.uid == request.resource.data.driver_id;
+
+      // Drivers can update/delete their own rides; admins can update any
+      allow update, delete: if (isNotBlocked() && request.auth.uid == resource.data.driver_id)
+                            || isAdmin();
     }
 
+    // ── Bookings ──────────────────────────────────────────────────────────────
     match /bookings/{bookingId} {
-      // Users can read their own bookings or rides they drive, admins can read all
+      // Passengers and drivers involved in a booking can read it; admins can read all
       allow read: if request.auth != null && (
         request.auth.uid == resource.data.passenger_id ||
-        request.auth.uid == get(/databases/$(database)/documents/rides/$(resource.data.ride_id)).data.driver_id ||
+        request.auth.uid == resource.data.driver_id ||
         isAdmin()
       );
-      
-      // Passengers can create bookings
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.passenger_id;
-      
-      // Passengers can update their own bookings, admins can update any
-      allow update: if (request.auth != null && request.auth.uid == resource.data.passenger_id) || isAdmin();
-      
-      // Passengers can delete their own bookings, admins can delete any
-      allow delete: if (request.auth != null && request.auth.uid == resource.data.passenger_id) || isAdmin();
+
+      // Non-blocked passengers can create bookings
+      allow create: if isNotBlocked() &&
+                       request.auth.uid == request.resource.data.passenger_id;
+
+      // Passengers OR drivers can update bookings (OTP, status changes, etc.),
+      // as long as they are not blocked; admins can always update
+      allow update: if (isNotBlocked() && (
+                          request.auth.uid == resource.data.passenger_id ||
+                          request.auth.uid == resource.data.driver_id
+                        ))
+                    || isAdmin();
+
+      // Passengers can delete their own bookings; admins can delete any
+      allow delete: if (isNotBlocked() && request.auth.uid == resource.data.passenger_id)
+                    || isAdmin();
     }
 
+    // ── Ratings ───────────────────────────────────────────────────────────────
     match /ratings/{ratingId} {
-      // Anyone can read ratings
-      allow read: if true;
-      
-      // Authenticated users can create ratings
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.rater_id;
-      
-      // Admins can manage ratings
+      // Any authenticated user can read ratings
+      // (needed for the "My Reviews" section on profiles and for ride cards)
+      allow read: if request.auth != null;
+
+      // Non-blocked authenticated users can create ratings (as the rater)
+      allow create: if isNotBlocked() &&
+                       request.auth.uid == request.resource.data.rater_id;
+
+      // Only admins can update or delete ratings
       allow update, delete: if isAdmin();
     }
-    
-    // Default catch-all
+
+    // ── Chat Messages ─────────────────────────────────────────────────────────
+    match /chats/{chatId}/messages/{messageId} {
+      // Participants of the chat can read messages
+      allow read: if request.auth != null;
+
+      // Non-blocked users can send messages
+      allow create: if isNotBlocked();
+
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Default Deny ──────────────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
     }

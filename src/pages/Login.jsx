@@ -7,8 +7,9 @@ import {
 } from 'firebase/auth'
 import { doc, setDoc } from 'firebase/firestore'
 import { useNavigate } from 'react-router-dom'
-import { Mail, Lock, User, Phone, School, Loader2, Info, CheckCircle2, Wifi } from 'lucide-react'
+import { Mail, Lock, User, Phone, School, Loader2, Info, CheckCircle2, ShieldOff } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function Login() {
     const [isSignUp, setIsSignUp] = useState(false)
@@ -16,6 +17,7 @@ export default function Login() {
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
     const navigate = useNavigate()
+    const { blockedError } = useAuth()
 
 
     const [formData, setFormData] = useState({
@@ -129,6 +131,19 @@ export default function Login() {
                         }
                     </p>
                 </div>
+
+                {/* Blocked account banner */}
+                {blockedError && (
+                    <div className="bg-red-50 border-2 border-red-200 text-red-700 p-6 rounded-[2rem] mb-8 flex items-start gap-4">
+                        <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center shrink-0">
+                            <ShieldOff size={22} className="text-red-500" />
+                        </div>
+                        <div>
+                            <p className="font-black text-base">Account Suspended</p>
+                            <p className="text-sm font-medium text-red-600 mt-0.5">Your account has been blocked by an administrator. Please contact support if you believe this is a mistake.</p>
+                        </div>
+                    </div>
+                )}
 
                 {error && (
                     <div className="bg-red-50 border border-red-100 text-red-600 p-5 rounded-2xl mb-8 flex flex-col gap-3 text-sm font-bold">
