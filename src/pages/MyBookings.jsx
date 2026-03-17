@@ -16,6 +16,7 @@ export default function MyBookings() {
     const [loading, setLoading] = useState(true)
     const [processingId, setProcessingId] = useState(null)
     const [ratingBooking, setRatingBooking] = useState(null)
+    const [ratingRole, setRatingRole] = useState('passenger')
     const [activeChat, setActiveChat] = useState(null)
     const [profile, setProfile] = useState(null)
 
@@ -86,12 +87,18 @@ export default function MyBookings() {
             orderBy('departure_time', 'desc')
         )
         const unsubscribeMyOffers = onSnapshot(qMyOffers, (snapshot) => {
-            const offersData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }))
-            // Filter out completed rides or older than 12h if needed, but usually we show history too
+            console.log("MyOffers Snapshot received, count:", snapshot.size)
+            const offersData = snapshot.docs.map(doc => {
+                const data = doc.data()
+                console.log(`Ride ${doc.id} status:`, data.status)
+                return {
+                    id: doc.id,
+                    ...data
+                }
+            })
             setMyOffers(offersData)
+        }, (err) => {
+            console.error("MyOffers Snapshot Error:", err)
         })
 
         return () => {
@@ -214,11 +221,17 @@ export default function MyBookings() {
             // 1. Update the Ride document first
             try {
                 console.log(`Updating ride ${rideId} to status: ${newStatus} at ${new Date().toISOString()}`)
-                await updateDoc(doc(db, 'rides', rideId), {
+                const rideRef = doc(db, 'rides', rideId)
+                await updateDoc(rideRef, {
                     status: newStatus,
                     ...(newStatus === 'started' ? { started_at: new Date().toISOString() } : {}),
                     ...(newStatus === 'completed' ? { ended_at: new Date().toISOString() } : {})
                 })
+
+                // Immediately verify the doc after update (for debugging)
+                const freshSnap = await getDoc(rideRef)
+                console.log(`Verification: Ride ${rideId} status is now ${freshSnap.data()?.status} in database.`)
+
                 console.log(`Successfully updated ride ${rideId} to ${newStatus}`)
             } catch (rideError) {
                 console.error("Permission error updating RIDE document:", rideError)
@@ -331,7 +344,10 @@ export default function MyBookings() {
                                 booking={booking}
                                 onWithdraw={() => handleWithdrawRequest(booking.id)}
                                 onPay={() => { }}
-                                onRate={() => setRatingBooking(booking)}
+                                onRate={() => {
+                                    setRatingRole('passenger')
+                                    setRatingBooking(booking)
+                                }}
                                 onChat={() => setActiveChat(booking)}
                             />
                         ))
@@ -383,6 +399,10 @@ export default function MyBookings() {
                                         onReject={() => handleRejectRequest(request.id)}
                                         onStart={(otp) => handleStartRide(request.id, otp, request.otp_code)}
                                         onEndTrip={() => handleEndTrip(request.id)}
+                                        onRate={() => {
+                                            setRatingRole('driver')
+                                            setRatingBooking(request)
+                                        }}
                                         onChat={() => setActiveChat(request)}
                                     />
                                 ))}
@@ -407,6 +427,7 @@ export default function MyBookings() {
                 {ratingBooking && (
                     <RatingModal
                         booking={ratingBooking}
+                        userRole={ratingRole}
                         onClose={() => setRatingBooking(null)}
                         onSuccess={() => {
                             setRatingBooking(null)
@@ -470,7 +491,17 @@ function PassengerTripCard({ booking, onRate, onWithdraw, onChat }) {
                             <span className="font-black text-xs uppercase tracking-widest">Driver</span>
                         </div>
                         <p className="text-2xl font-black text-slate-900">{ride.driver?.name}</p>
-                        <p className="text-sm font-bold text-slate-400">{ride.driver?.phone}</p>
+                        <div className="flex items-center md:justify-end gap-2">
+                             <p className="text-sm font-bold text-slate-400">{ride.driver?.phone}</p>
+                             <div className="w-1 h-1 rounded-full bg-slate-300 mx-1" />
+                             {ride.driver?.rating_count > 0 ? (
+                                <p className="text-sm font-bold text-slate-600 flex items-center gap-1">
+                                    <Star size={14} className="fill-amber-400 text-amber-400" /> {ride.driver.average_rating}
+                                </p>
+                             ) : (
+                                <p className="text-[10px] font-black uppercase tracking-widest text-rydset-500 bg-rydset-50 px-2 py-0.5 rounded-full">New</p>
+                             )}
+                        </div>
                     </div>
                 </div>
 
@@ -513,7 +544,7 @@ function PassengerTripCard({ booking, onRate, onWithdraw, onChat }) {
                 <button onClick={onChat} className="w-full h-12 bg-white rounded-xl font-black text-xs uppercase tracking-widest text-rydset-600 border border-slate-200 shadow-sm flex items-center justify-center gap-2">
                     <MessageCircle size={16} /> Chat
                 </button>
-                {isCompleted && !booking.rated && (
+                {isCompleted && !booking.passenger_rated && (
                     <button onClick={onRate} className="w-full h-12 bg-rydset-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-rydset-600/20 flex items-center justify-center gap-2 transition-all hover:scale-105 active:scale-95">
                         <Star size={16} /> Rate Trip
                     </button>
@@ -531,7 +562,7 @@ function PassengerTripCard({ booking, onRate, onWithdraw, onChat }) {
     )
 }
 
-function DriverRideCard({ request, onAccept, onReject, onStart, onEndTrip, isProcessing, onChat }) {
+function DriverRideCard({ request, onAccept, onReject, onStart, onEndTrip, onRate, isProcessing, onChat }) {
     const { passenger } = request
     const isPending = request.status === 'pending'
     const isAccepted = request.status === 'accepted'
@@ -559,7 +590,13 @@ function DriverRideCard({ request, onAccept, onReject, onStart, onEndTrip, isPro
                         <p className="text-2xl font-black text-slate-900">{passenger.name}</p>
                         <div className="flex items-center gap-2">
                             <div className="px-3 py-1 bg-slate-100 rounded-full text-[10px] font-black text-slate-400">RSET STUDENT</div>
-                            <p className="text-sm font-bold text-slate-400">⭐ 4.9</p>
+                            {passenger.rating_count > 0 ? (
+                                <p className="text-sm font-bold text-slate-600 flex items-center gap-1">
+                                    <Star size={14} className="fill-amber-400 text-amber-400" /> {passenger.average_rating}
+                                </p>
+                            ) : (
+                                <p className="text-[10px] font-black uppercase tracking-widest text-rydset-500 bg-rydset-50 px-2 py-0.5 rounded-full border border-rydset-100">New</p>
+                            )}
                         </div>
                     </div>
 
@@ -630,9 +667,16 @@ function DriverRideCard({ request, onAccept, onReject, onStart, onEndTrip, isPro
                         {isProcessing ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={16} /> End Trip</>}
                     </button>
                 ) : (
-                    <button onClick={onChat} className="w-full h-12 bg-white rounded-xl font-black text-xs uppercase tracking-widest text-rydset-600 border border-slate-200 shadow-sm flex items-center justify-center gap-2">
-                        <MessageCircle size={16} /> Chat
-                    </button>
+                    <div className="space-y-3">
+                        <button onClick={onChat} className="w-full h-12 bg-white rounded-xl font-black text-xs uppercase tracking-widest text-rydset-600 border border-slate-200 shadow-sm flex items-center justify-center gap-2 hover:bg-slate-50">
+                            <MessageCircle size={16} /> Chat
+                        </button>
+                        {isCompleted && !request.driver_rated && (
+                            <button onClick={onRate} className="w-full h-12 bg-rydset-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-rydset-600/20 flex items-center justify-center gap-2 transition-all hover:scale-105 active:scale-95">
+                                <Star size={16} /> Rate Passenger
+                            </button>
+                        )}
+                    </div>
                 )}
 
                 {isPending && (
@@ -679,6 +723,7 @@ function RideOfferCard({ ride, onStart, onEnd, onCancel, isProcessing, activeBoo
             <div className={`md:w-48 p-8 flex flex-col items-center justify-center text-center space-y-4 ${isStarted ? 'bg-accent text-rydset-600' : isCompleted ? 'bg-slate-100 text-slate-400' : isCancelled ? 'bg-red-50 text-red-400' : 'bg-rydset-600 text-white'}`}>
                 {isStarted ? <Play size={32} /> : isCompleted ? <CheckCircle2 size={32} /> : isCancelled ? <Ban size={32} /> : <Calendar size={32} />}
                 <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-60 italic">ID: {ride.id}</p>
                     <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Ride Status</p>
                     <p className="font-black uppercase tracking-tight text-sm">{ride.status || 'planned'}</p>
                 </div>

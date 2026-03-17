@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { auth, db } from '../lib/firebase'
 import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
-import { Search, MapPin, Calendar, Clock, User, Armchair, ChevronRight, X, ShieldCheck, Loader2, IndianRupee, Leaf, Info, Map as MapIcon, Mail, ArrowRight, CheckCircle2, Play } from 'lucide-react'
+import { Search, MapPin, Calendar, Clock, User, Armchair, ChevronRight, X, ShieldCheck, Loader2, IndianRupee, Leaf, Info, Map as MapIcon, Mail, ArrowRight, CheckCircle2, Play, Car, Star } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import L from 'leaflet'
 import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet'
@@ -12,6 +12,7 @@ export default function Dashboard() {
     const { user } = useAuth()
     const [rides, setRides] = useState([])
     const [loading, setLoading] = useState(true)
+    const [requestedRideIds, setRequestedRideIds] = useState(new Set())
     const [filters, setFilters] = useState({
         source: '',
         destination: '',
@@ -25,8 +26,29 @@ export default function Dashboard() {
     const [selectedRide, setSelectedRide] = useState(null)
 
     useEffect(() => {
+        if (!user) return
         fetchRides()
-    }, [])
+        fetchUserRequests()
+    }, [user])
+
+    const fetchUserRequests = async () => {
+        try {
+            const bookingsRef = collection(db, 'bookings')
+            const q = query(
+                bookingsRef,
+                where('passenger_id', '==', user?.uid)
+            )
+            const querySnapshot = await getDocs(q)
+            const activeRequests = querySnapshot.docs
+                .map(doc => doc.data())
+                .filter(b => ['pending', 'accepted'].includes(b.status))
+                .map(b => b.ride_id)
+            
+            setRequestedRideIds(new Set(activeRequests))
+        } catch (error) {
+            console.error('Error fetching user requests:', error)
+        }
+    }
 
     const fetchRides = async () => {
         try {
@@ -205,6 +227,7 @@ export default function Dashboard() {
                             ride={ride}
                             onJoin={() => setSelectedRide(ride)}
                             isOwnRide={ride.driver_id === user?.uid}
+                            isRequested={requestedRideIds.has(ride.id)}
                         />
                     ))}
                     {filteredRides.length === 0 && (
@@ -224,6 +247,7 @@ export default function Dashboard() {
                         onSuccess={() => {
                             setSelectedRide(null)
                             fetchRides()
+                            fetchUserRequests()
                         }}
                     />
                 )}
@@ -232,7 +256,7 @@ export default function Dashboard() {
     )
 }
 
-function RideCard({ ride, onJoin, isOwnRide }) {
+function RideCard({ ride, onJoin, isOwnRide, isRequested }) {
     const date = new Date(ride.departure_time).toLocaleDateString(undefined, {
         weekday: 'short',
         month: 'short',
@@ -252,12 +276,30 @@ function RideCard({ ride, onJoin, isOwnRide }) {
         >
             <div className="flex justify-between items-start mb-10">
                 <div className="flex items-center gap-5">
-                    <div className="w-16 h-16 bg-rydset-600 rounded-2xl flex items-center justify-center text-accent shadow-2xl shadow-rydset-600/10 group-hover:scale-110 transition-transform">
-                        <User size={32} />
-                    </div>
+                    {ride.driver?.vehicle_info?.image_url ? (
+                        <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-2xl shadow-rydset-600/10 group-hover:scale-110 transition-transform shrink-0">
+                            <img src={ride.driver.vehicle_info.image_url} alt="Vehicle" className="w-full h-full object-cover" />
+                        </div>
+                    ) : (
+                        <div className="w-16 h-16 bg-rydset-600 rounded-2xl flex items-center justify-center text-accent shadow-2xl shadow-rydset-600/10 group-hover:scale-110 transition-transform shrink-0">
+                            <User size={32} />
+                        </div>
+                    )}
                     <div>
                         <h3 className="text-2xl font-black text-rydset-600 tracking-tight">{ride.driver?.name}</h3>
-                        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-1">Verified RSET Driver</p>
+                        <div className="flex items-center gap-2 mt-1">
+                            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">
+                                {ride.driver?.vehicle_info?.model || 'Verified RSET Driver'}
+                            </p>
+                            <div className="w-1 h-1 rounded-full bg-slate-300 mx-1" />
+                            {ride.driver?.rating_count > 0 ? (
+                                <p className="text-sm font-bold text-slate-600 flex items-center gap-1">
+                                    <Star size={14} className="fill-amber-400 text-amber-400" /> {ride.driver.average_rating}
+                                </p>
+                            ) : (
+                                <p className="text-[10px] font-black uppercase tracking-widest text-rydset-500 bg-rydset-50 px-2 py-0.5 rounded-full">New</p>
+                            )}
+                        </div>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -331,6 +373,10 @@ function RideCard({ ride, onJoin, isOwnRide }) {
                 {isOwnRide ? (
                     <button disabled className="h-16 px-10 bg-slate-50 text-slate-400 rounded-2xl font-black text-sm uppercase tracking-widest border border-slate-100 cursor-not-allowed">
                         Your Active Ride
+                    </button>
+                ) : isRequested ? (
+                    <button disabled className="h-18 px-12 bg-slate-100 text-slate-400 rounded-[1.75rem] font-black text-xl flex items-center justify-center gap-3 shadow-inner border-2 border-slate-200 cursor-not-allowed">
+                        Requested <CheckCircle2 size={24} />
                     </button>
                 ) : (
                     <button
@@ -568,6 +614,24 @@ function JoinRideModal({ ride, onClose, onSuccess, initialFilters }) {
                             <p className="text-2xl font-black text-rydset-600">₹{totalFare}</p>
                         </div>
                     </div>
+
+                    {ride.driver?.vehicle_info && (
+                        <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex items-center gap-4">
+                            {ride.driver.vehicle_info.image_url ? (
+                                <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-sm shrink-0">
+                                    <img src={ride.driver.vehicle_info.image_url} alt="Vehicle" className="w-full h-full object-cover" />
+                                </div>
+                            ) : (
+                                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-slate-300 shadow-sm shrink-0 border border-slate-100">
+                                    <Car size={32} />
+                                </div>
+                            )}
+                            <div>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Driver's Vehicle</p>
+                                <p className="font-bold text-slate-700">{ride.driver.vehicle_info.model} • {ride.driver.vehicle_info.number_plate}</p>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="bg-accent/10 p-6 rounded-[2rem] border border-accent/20 flex gap-5 items-center">
                         <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-rydset-600 shadow-lg shadow-accent/20">

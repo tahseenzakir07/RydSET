@@ -3,7 +3,7 @@ import { auth, db } from '../lib/firebase'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Calendar, Clock, Armchair, Car, Info, Loader2, IndianRupee, ArrowRight, Sparkles, Navigation } from 'lucide-react'
+import { MapPin, Calendar, Clock, Armchair, Car, Info, Loader2, IndianRupee, ArrowRight, Sparkles, Navigation, User } from 'lucide-react'
 import MapPicker from '../components/MapPicker'
 import LocationInput from '../components/LocationInput'
 import { motion } from 'framer-motion'
@@ -102,6 +102,30 @@ export default function CreateRide() {
     }
 
     if (authLoading) return <div className="min-h-screen flex items-center justify-center">Loading Profile...</div>
+
+    if (profile?.driver_status !== 'approved') {
+        return (
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="max-w-3xl mx-auto pt-20 px-4 text-center"
+            >
+                <div className="w-24 h-24 bg-rydset-50 rounded-[2rem] flex items-center justify-center text-rydset-400 mx-auto mb-8 shadow-inner border border-slate-100/50">
+                    <Car className="w-10 h-10" />
+                </div>
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-4">Driver Verification Required</h1>
+                <p className="text-slate-500 font-medium text-lg mb-8 max-w-lg mx-auto">
+                    To maintain safety and trust in our community, you must register your vehicle and be approved before offering rides.
+                </p>
+                <button
+                    onClick={() => navigate('/profile')}
+                    className="inline-flex items-center gap-3 bg-rydset-600 hover:bg-rydset-700 text-white px-8 py-4 rounded-[1.5rem] font-black text-lg transition-all shadow-xl shadow-rydset-600/20 active:scale-95 hover:scale-105"
+                >
+                    <User size={20} /> Complete Your Profile
+                </button>
+            </motion.div>
+        )
+    }
 
     return (
         <motion.div

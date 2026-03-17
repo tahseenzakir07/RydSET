@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Car, User, LogOut, Search, PlusCircle, BookOpen } from 'lucide-react'
+import { Car, User, LogOut, Search, PlusCircle, BookOpen, ShieldCheck } from 'lucide-react'
 
 export default function Navbar() {
     const { user, profile, signOut } = useAuth()
@@ -21,6 +21,12 @@ export default function Navbar() {
                     {user ? (
                         <>
                             <div className="hidden lg:flex items-center gap-8">
+                                {profile?.role === 'admin' && (
+                                    <Link to="/admin" className="flex items-center gap-2 text-rydset-600 hover:text-rydset-700 font-bold transition-colors">
+                                        <ShieldCheck size={18} />
+                                        <span>Admin</span>
+                                    </Link>
+                                )}
                                 <Link to="/dashboard" className="flex items-center gap-2 text-slate-600 hover:text-rydset-600 font-bold transition-colors">
                                     <Search size={18} />
                                     <span>Find Rides</span>
@@ -39,8 +45,10 @@ export default function Navbar() {
 
                             <div className="flex items-center gap-4">
                                 <div className="text-right hidden sm:block">
-                                    <p className="text-sm font-black text-rydset-600 leading-tight">{profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Member'}</p>
-                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{profile?.role || 'User'}</p>
+                                    <Link to="/profile" className="hover:opacity-75 transition-opacity block">
+                                        <p className="text-sm font-black text-rydset-600 leading-tight">{profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Member'}</p>
+                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{profile?.role || 'User'}</p>
+                                    </Link>
                                 </div>
                                 <button
                                     onClick={() => signOut()}

@@ -7,6 +7,8 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import CreateRide from './pages/CreateRide'
 import MyBookings from './pages/MyBookings'
+import Profile from './pages/Profile'
+import AdminDashboard from './pages/AdminDashboard'
 
 const PrivateRoute = ({ children }) => {
     const { user, loading } = useAuth()
@@ -32,6 +34,12 @@ function App() {
                             } />
                             <Route path="/my-bookings" element={
                                 <PrivateRoute><MyBookings /></PrivateRoute>
+                            } />
+                            <Route path="/profile" element={
+                                <PrivateRoute><Profile /></PrivateRoute>
+                            } />
+                            <Route path="/admin" element={
+                                <PrivateRoute><AdminDashboard /></PrivateRoute>
                             } />
                         </Routes>
                     </main>

@@ -13,6 +13,7 @@ export default function MobileNav() {
         { path: '/dashboard', label: 'Find', icon: Search },
         { path: '/create-ride', label: 'Offer', icon: PlusCircle },
         { path: '/my-bookings', label: 'My Trips', icon: BookOpen },
+        { path: '/profile', label: 'Profile', icon: User },
     ]
 
     return (

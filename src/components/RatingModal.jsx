@@ -1,15 +1,28 @@
 import { useState } from 'react'
 import { db } from '../lib/firebase'
-import { collection, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp, updateDoc, doc, getDoc } from 'firebase/firestore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Star, X, Send, Loader2, MessageSquare, ShieldCheck } from 'lucide-react'
-
-export default function RatingModal({ booking, onClose, onSuccess }) {
+export default function RatingModal({ 
+    booking, 
+    onClose, 
+    onSuccess,
+    userRole = 'passenger' // 'passenger' | 'driver'
+}) {
     const [rating, setRating] = useState(0)
     const [hover, setHover] = useState(0)
     const [comment, setComment] = useState('')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
+
+    const isRatingDriver = userRole === 'passenger'
+    const rateeId = isRatingDriver 
+        ? (booking.ride.driver_id || (booking.ride.driver && booking.ride.driver.uid)) 
+        : booking.passenger_id
+        
+    const rateeName = isRatingDriver 
+        ? booking.ride.driver?.name 
+        : booking.passenger?.name
 
     const handleSubmit = async () => {
         if (rating === 0) {
@@ -21,27 +34,48 @@ export default function RatingModal({ booking, onClose, onSuccess }) {
         setError('')
 
         try {
+            if (!rateeId) throw new Error("Could not identify the user being rated.")
+
+            // 1. Save the new rating
             await addDoc(collection(db, 'ratings'), {
                 booking_id: booking.id,
-                rater_id: booking.passenger_id,
-                ratee_id: booking.ride.driver_id || (booking.ride.driver && booking.ride.driver.uid) || booking.ride.driver_id,
+                rater_id: isRatingDriver ? booking.passenger_id : booking.ride.driver_id,
+                ratee_id: rateeId,
                 rating: rating,
                 comment: comment,
+                role_rated: isRatingDriver ? 'driver' : 'passenger',
                 created_at: serverTimestamp()
             })
 
-            // Mark booking as rated
-            await updateDoc(doc(db, 'bookings', booking.id), { rated: true })
+            // 2. Mark booking as rated by this user
+            const updateField = isRatingDriver ? 'passenger_rated' : 'driver_rated'
+            await updateDoc(doc(db, 'bookings', booking.id), { [updateField]: true })
 
-            // Flag driver if rating is less than 3 stars
-            if (rating < 3) {
-                const driverId = booking.ride.driver_id || (booking.ride.driver && booking.ride.driver.uid)
-                if (driverId) {
-                    await updateDoc(doc(db, 'profiles', driverId), {
-                        flagged: true,
-                        flagged_reason: 'Low rating received'
-                    })
+            // 3. Update the ratee's cumulative profile rating
+            const profileRef = doc(db, 'profiles', rateeId)
+            const profileSnap = await getDoc(profileRef)
+            
+            if (profileSnap.exists()) {
+                const pData = profileSnap.data()
+                const currentCount = pData.rating_count || 0
+                const currentAvg = pData.average_rating || 0
+                
+                // Calculate new cumulative average
+                const newCount = currentCount + 1
+                const newAvg = ((currentAvg * currentCount) + rating) / newCount
+                
+                const profileUpdates = {
+                    average_rating: Number(newAvg.toFixed(2)),
+                    rating_count: newCount
                 }
+                
+                // Flag user if rating is less than 3 stars
+                if (rating < 3) {
+                    profileUpdates.flagged = true
+                    profileUpdates.flagged_reason = 'Low rating received'
+                }
+
+                await updateDoc(profileRef, profileUpdates)
             }
 
             onSuccess()
@@ -73,8 +107,12 @@ export default function RatingModal({ booking, onClose, onSuccess }) {
                     </div>
 
                     <div className="space-y-2">
-                        <h2 className="text-3xl font-black text-slate-900 tracking-tight">Rate Your Trip</h2>
-                        <p className="text-slate-500 font-medium">How was your ride with <span className="text-rydset-600 font-bold">{booking.ride.driver.name}</span>?</p>
+                        <h2 className="text-3xl font-black text-slate-900 tracking-tight">
+                            {isRatingDriver ? 'Rate Your Trip' : 'Rate Your Passenger'}
+                        </h2>
+                        <p className="text-slate-500 font-medium">
+                            How was your {isRatingDriver ? 'ride with' : 'experience with'} <span className="text-rydset-600 font-bold">{rateeName}</span>?
+                        </p>
                     </div>
 
                     {/* Star Rating Logic */}
