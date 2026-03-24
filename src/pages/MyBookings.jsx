@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react'
-import { auth, db } from '../lib/firebase'
-import { collection, query, where, getDocs, orderBy, doc, getDoc, deleteDoc, updateDoc, writeBatch, onSnapshot } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, writeBatch, onSnapshot, orderBy } from 'firebase/firestore'
+import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
-import { MessageCircle, Calendar, Clock, MapPin, IndianRupee, CreditCard, ChevronRight, X, Loader2, CheckCircle2, User, Phone, Map, ShieldCheck, Mail, Star, Check, Ban, Play, Armchair, Car } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { MessageCircle, Calendar, Clock, MapPin, IndianRupee, CreditCard, ChevronRight, X, Loader2, CheckCircle2, User, Phone, Map, ShieldCheck, Mail, Star, Check, Ban, Play, Armchair, Car, ExternalLink } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import RatingModal from '../components/RatingModal'
 import Chat from '../components/Chat'
 
 export default function MyBookings() {
     const { user } = useAuth()
+    const navigate = useNavigate()
     const [activeTab, setActiveTab] = useState('trips') // trips | rides
     const [bookings, setBookings] = useState([]) // As passenger
     const [rideRequests, setRideRequests] = useState([]) // Bookings for my rides
@@ -452,6 +454,7 @@ export default function MyBookings() {
 }
 
 function PassengerTripCard({ booking, onRate, onWithdraw, onChat }) {
+    const navigate = useNavigate()
     const { ride } = booking
     const isAccepted = booking.status === 'accepted'
     const isStarted = booking.status === 'started'
@@ -490,7 +493,15 @@ function PassengerTripCard({ booking, onRate, onWithdraw, onChat }) {
                             <User size={18} />
                             <span className="font-black text-xs uppercase tracking-widest">Driver</span>
                         </div>
-                        <p className="text-2xl font-black text-slate-900">{ride.driver?.name}</p>
+                        <div className="flex flex-col gap-1">
+                            <p className="text-2xl font-black text-slate-900">{ride.driver?.name}</p>
+                            <button
+                                onClick={() => navigate(`/profile/${ride.driver_id}`)}
+                                className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-rydset-600 hover:text-rydset-700 transition-colors w-fit"
+                            >
+                                <ExternalLink size={10} /> View Profile
+                            </button>
+                        </div>
                         <div className="flex items-center md:justify-end gap-2">
                              <p className="text-sm font-bold text-slate-400">{ride.driver?.phone}</p>
                              <div className="w-1 h-1 rounded-full bg-slate-300 mx-1" />
@@ -563,6 +574,7 @@ function PassengerTripCard({ booking, onRate, onWithdraw, onChat }) {
 }
 
 function DriverRideCard({ request, onAccept, onReject, onStart, onEndTrip, onRate, isProcessing, onChat }) {
+    const navigate = useNavigate()
     const { passenger } = request
     const isPending = request.status === 'pending'
     const isAccepted = request.status === 'accepted'
@@ -587,7 +599,15 @@ function DriverRideCard({ request, onAccept, onReject, onStart, onEndTrip, onRat
                             <User size={18} />
                             <span className="font-black text-xs uppercase tracking-widest">Passenger</span>
                         </div>
-                        <p className="text-2xl font-black text-slate-900">{passenger.name}</p>
+                        <div className="flex flex-col gap-1">
+                            <p className="text-2xl font-black text-slate-900">{passenger.name}</p>
+                            <button
+                                onClick={() => navigate(`/profile/${request.passenger_id}`)}
+                                className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-rydset-600 hover:text-rydset-700 transition-colors w-fit"
+                            >
+                                <ExternalLink size={10} /> View Profile
+                            </button>
+                        </div>
                         <div className="flex items-center gap-2">
                             <div className="px-3 py-1 bg-slate-100 rounded-full text-[10px] font-black text-slate-400">RSET STUDENT</div>
                             {passenger.rating_count > 0 ? (

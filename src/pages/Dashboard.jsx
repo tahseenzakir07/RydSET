@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { auth, db } from '../lib/firebase'
 import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
-import { Search, MapPin, Calendar, Clock, User, Armchair, ChevronRight, X, ShieldCheck, Loader2, IndianRupee, Leaf, Info, Map as MapIcon, Mail, ArrowRight, CheckCircle2, Play, Car, Star } from 'lucide-react'
+import { Search, MapPin, Calendar, Clock, User, Armchair, ChevronRight, X, ShieldCheck, Loader2, IndianRupee, Leaf, Info, Map as MapIcon, Mail, ArrowRight, CheckCircle2, Play, Car, Star, ExternalLink } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import L from 'leaflet'
 import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet'
 import LocationInput from '../components/LocationInput'
+import { useNavigate } from 'react-router-dom'
 
 export default function Dashboard() {
     const { user } = useAuth()
@@ -257,6 +258,7 @@ export default function Dashboard() {
 }
 
 function RideCard({ ride, onJoin, isOwnRide, isRequested }) {
+    const navigate = useNavigate()
     const date = new Date(ride.departure_time).toLocaleDateString(undefined, {
         weekday: 'short',
         month: 'short',
@@ -287,18 +289,29 @@ function RideCard({ ride, onJoin, isOwnRide, isRequested }) {
                     )}
                     <div>
                         <h3 className="text-2xl font-black text-rydset-600 tracking-tight">{ride.driver?.name}</h3>
-                        <div className="flex items-center gap-2 mt-1">
-                            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">
-                                {ride.driver?.vehicle_info?.model || 'Verified RSET Driver'}
-                            </p>
-                            <div className="w-1 h-1 rounded-full bg-slate-300 mx-1" />
-                            {ride.driver?.rating_count > 0 ? (
-                                <p className="text-sm font-bold text-slate-600 flex items-center gap-1">
-                                    <Star size={14} className="fill-amber-400 text-amber-400" /> {ride.driver.average_rating}
+                        <div className="flex flex-col gap-1 mt-1">
+                            <div className="flex items-center gap-2">
+                                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">
+                                    {ride.driver?.vehicle_info?.model || 'Verified RSET Driver'}
                                 </p>
-                            ) : (
-                                <p className="text-[10px] font-black uppercase tracking-widest text-rydset-500 bg-rydset-50 px-2 py-0.5 rounded-full">New</p>
-                            )}
+                                <div className="w-1 h-1 rounded-full bg-slate-300 mx-1" />
+                                {ride.driver?.rating_count > 0 ? (
+                                    <p className="text-sm font-bold text-slate-600 flex items-center gap-1">
+                                        <Star size={14} className="fill-amber-400 text-amber-400" /> {ride.driver.average_rating}
+                                    </p>
+                                ) : (
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-rydset-500 bg-rydset-50 px-2 py-0.5 rounded-full">New</p>
+                                )}
+                            </div>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/profile/${ride.driver_id}`);
+                                }}
+                                className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-rydset-600 hover:text-rydset-700 transition-colors w-fit mt-1 border border-rydset-100 bg-rydset-50 px-2.5 py-1 rounded-full"
+                            >
+                                <ExternalLink size={10} /> View Profile
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -393,6 +406,7 @@ function RideCard({ ride, onJoin, isOwnRide, isRequested }) {
 
 function JoinRideModal({ ride, onClose, onSuccess, initialFilters }) {
     const { user } = useAuth()
+    const navigate = useNavigate()
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const [routeInfo, setRouteInfo] = useState({ distance: 0, coords: [] })
@@ -615,23 +629,31 @@ function JoinRideModal({ ride, onClose, onSuccess, initialFilters }) {
                         </div>
                     </div>
 
-                    {ride.driver?.vehicle_info && (
-                        <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex items-center gap-4">
-                            {ride.driver.vehicle_info.image_url ? (
+                    <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            {ride.driver?.vehicle_info?.image_url ? (
                                 <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-sm shrink-0">
                                     <img src={ride.driver.vehicle_info.image_url} alt="Vehicle" className="w-full h-full object-cover" />
                                 </div>
                             ) : (
                                 <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-slate-300 shadow-sm shrink-0 border border-slate-100">
-                                    <Car size={32} />
+                                    <User size={32} />
                                 </div>
                             )}
                             <div>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Driver's Vehicle</p>
-                                <p className="font-bold text-slate-700">{ride.driver.vehicle_info.model} • {ride.driver.vehicle_info.number_plate}</p>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Driver: {ride.driver?.name}</p>
+                                {ride.driver?.vehicle_info && (
+                                    <p className="font-bold text-slate-700">{ride.driver.vehicle_info.model} • {ride.driver.vehicle_info.number_plate}</p>
+                                )}
                             </div>
                         </div>
-                    )}
+                        <button
+                            onClick={() => navigate(`/profile/${ride.driver_id}`)}
+                            className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-rydset-600 hover:text-rydset-700 transition-colors shrink-0 bg-white px-3 py-2 rounded-xl shadow-sm border border-slate-200"
+                        >
+                            <ExternalLink size={12} /> Profile
+                        </button>
+                    </div>
 
                     <div className="bg-accent/10 p-6 rounded-[2rem] border border-accent/20 flex gap-5 items-center">
                         <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-rydset-600 shadow-lg shadow-accent/20">

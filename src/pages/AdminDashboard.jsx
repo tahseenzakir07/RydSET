@@ -2,13 +2,19 @@ import { useState, useEffect } from 'react'
 import { db } from '../lib/firebase'
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
-import { Navigate } from 'react-router-dom'
-import { ShieldCheck, User, Car, Check, X, Loader2, AlertCircle, Users, Ban, CheckCircle2, ShieldOff } from 'lucide-react'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { ShieldCheck, User, Car, Check, X, Loader2, AlertCircle, Users, Ban, CheckCircle2, ShieldOff, ExternalLink } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export default function AdminDashboard() {
     const { user, profile, loading: authLoading } = useAuth()
-    const [activeTab, setActiveTab] = useState('approvals') // 'approvals' | 'users'
+    const navigate = useNavigate()
+    const [searchParams, setSearchParams] = useSearchParams()
+    const activeTab = searchParams.get('tab') || 'approvals'
+
+    const setActiveTab = (tab) => {
+        setSearchParams({ tab })
+    }
 
     // Driver approvals state
     const [requests, setRequests] = useState([])
@@ -279,23 +285,31 @@ export default function AdminDashboard() {
                                             </div>
                                         </div>
 
-                                        <button
-                                            onClick={() => handleToggleBlock(u)}
-                                            disabled={blockLoading === u.id}
-                                            className={`w-full h-12 rounded-[1.25rem] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 ${
-                                                u.is_blocked
-                                                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
-                                                    : 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-100'
-                                            }`}
-                                        >
-                                            {blockLoading === u.id ? (
-                                                <Loader2 className="animate-spin" size={16} />
-                                            ) : u.is_blocked ? (
-                                                <><CheckCircle2 size={16} /> Unblock User</>
-                                            ) : (
-                                                <><Ban size={16} /> Block User</>
-                                            )}
-                                        </button>
+                                        <div className="flex flex-col gap-2">
+                                            <button
+                                                onClick={() => navigate(`/profile/${u.id}`)}
+                                                className="w-full h-10 rounded-[1rem] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 bg-rydset-50 hover:bg-rydset-100 text-rydset-600 border border-rydset-100"
+                                            >
+                                                <ExternalLink size={14} /> View Profile
+                                            </button>
+                                            <button
+                                                onClick={() => handleToggleBlock(u)}
+                                                disabled={blockLoading === u.id}
+                                                className={`w-full h-10 rounded-[1rem] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 ${
+                                                    u.is_blocked
+                                                        ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
+                                                        : 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-100'
+                                                }`}
+                                            >
+                                                {blockLoading === u.id ? (
+                                                    <Loader2 className="animate-spin" size={16} />
+                                                ) : u.is_blocked ? (
+                                                    <><CheckCircle2 size={16} /> Unblock User</>
+                                                ) : (
+                                                    <><Ban size={16} /> Block User</>
+                                                )}
+                                            </button>
+                                        </div>
                                     </motion.div>
                                 ))}
                             </div>

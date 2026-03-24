@@ -27,8 +27,10 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == userId;
 
       // Users can update their own profile (if not blocked),
-      // OR admins can update ANY profile (e.g. to set is_blocked, driver_status)
+      // OR authenticated users can update those fields related to ratings (prototype-mode)
+      // OR admins can update ANY profile
       allow update: if (request.auth != null && request.auth.uid == userId && isNotBlocked())
+                    || (request.auth != null && isNotBlocked() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['average_rating', 'rating_count', 'flagged', 'flagged_reason']))
                     || isAdmin();
 
       // Only admins can delete profiles
