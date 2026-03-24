@@ -1,4 +1,4 @@
-# 🚗 RSET RydSET
+# 🚗 RydSET
 
 A premium, production-ready carpooling platform designed exclusively for the **Rajagiri School of Engineering & Technology (RSET)** community. Connect with peers, reduce campus traffic, and save on your daily commute.
 
