@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { Search, PlusCircle, BookOpen, User } from 'lucide-react'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../../contexts/AuthContext'
 import { motion } from 'framer-motion'
 
 export default function MobileNav() {

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../../contexts/AuthContext'
 import { Car, User, LogOut, Search, PlusCircle, BookOpen, ShieldCheck } from 'lucide-react'
 
 export default function Navbar() {

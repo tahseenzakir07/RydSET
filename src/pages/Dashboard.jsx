@@ -6,7 +6,7 @@ import { Search, MapPin, Calendar, Clock, User, Armchair, ChevronRight, X, Shiel
 import { motion, AnimatePresence } from 'framer-motion'
 import L from 'leaflet'
 import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet'
-import LocationInput from '../components/LocationInput'
+import LocationInput from '../components/map/LocationInput'
 import { useNavigate } from 'react-router-dom'
 
 export default function Dashboard() {

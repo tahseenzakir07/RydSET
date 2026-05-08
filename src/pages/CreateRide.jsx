@@ -4,8 +4,8 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { MapPin, Calendar, Clock, Armchair, Car, Info, Loader2, IndianRupee, ArrowRight, Sparkles, Navigation, User } from 'lucide-react'
-import MapPicker from '../components/MapPicker'
-import LocationInput from '../components/LocationInput'
+import MapPicker from '../components/map/MapPicker'
+import LocationInput from '../components/map/LocationInput'
 import { motion } from 'framer-motion'
 
 export default function CreateRide() {

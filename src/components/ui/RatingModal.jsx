@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { db } from '../lib/firebase'
+import { db } from '../../lib/firebase'
 import { collection, addDoc, serverTimestamp, updateDoc, doc, getDoc } from 'firebase/firestore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Star, X, Send, Loader2, MessageSquare, ShieldCheck } from 'lucide-react'

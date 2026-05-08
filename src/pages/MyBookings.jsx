@@ -5,13 +5,14 @@ import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { MessageCircle, Calendar, Clock, MapPin, IndianRupee, CreditCard, ChevronRight, X, Loader2, CheckCircle2, User, Phone, Map, ShieldCheck, Mail, Star, Check, Ban, Play, Armchair, Car, ExternalLink } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import RatingModal from '../components/RatingModal'
-import Chat from '../components/Chat'
+import RatingModal from '../components/ui/RatingModal'
+import Chat from '../components/chat/Chat'
 
 export default function MyBookings() {
     const { user } = useAuth()
     const navigate = useNavigate()
     const [activeTab, setActiveTab] = useState('trips') // trips | rides
+    const [timeFilter, setTimeFilter] = useState('all') // 1month | 3months | 6months | all
     const [bookings, setBookings] = useState([]) // As passenger
     const [rideRequests, setRideRequests] = useState([]) // Bookings for my rides
     const [myOffers, setMyOffers] = useState([]) // Rides I have created
@@ -171,7 +172,22 @@ export default function MyBookings() {
         if (!confirm('Are you sure you want to withdraw your request?')) return
         setProcessingId(bookingId)
         try {
-            await updateDoc(doc(db, 'bookings', bookingId), { status: 'cancelled' })
+            const bookingRef = doc(db, 'bookings', bookingId)
+            const bookingSnap = await getDoc(bookingRef)
+            if (bookingSnap.exists()) {
+                const bData = bookingSnap.data()
+                const batch = writeBatch(db)
+                batch.update(bookingRef, { status: 'cancelled' })
+                
+                if (bData.status === 'accepted' || bData.status === 'started') {
+                    const rideRef = doc(db, 'rides', bData.ride_id)
+                    const rideSnap = await getDoc(rideRef)
+                    if (rideSnap.exists()) {
+                         batch.update(rideRef, { seats_available: rideSnap.data().seats_available + 1 })
+                    }
+                }
+                await batch.commit()
+            }
             alert('Request withdrawn successfully.')
         } catch (error) {
             alert(error.message)
@@ -308,6 +324,24 @@ export default function MyBookings() {
         }
     }
 
+    const filterByTime = (items, dateKey) => {
+        if (timeFilter === 'all') return items
+        const now = new Date()
+        let cutoff = new Date()
+        if (timeFilter === '1month') cutoff.setMonth(now.getMonth() - 1)
+        else if (timeFilter === '3months') cutoff.setMonth(now.getMonth() - 3)
+        else if (timeFilter === '6months') cutoff.setMonth(now.getMonth() - 6)
+        
+        return items.filter(item => {
+            const itemDate = new Date(item[dateKey])
+            return itemDate >= cutoff
+        })
+    }
+
+    const filteredBookings = filterByTime(bookings, 'created_at')
+    const filteredRideRequests = filterByTime(rideRequests, 'created_at')
+    const filteredMyOffers = filterByTime(myOffers, 'departure_time')
+
     return (
         <div className="max-w-5xl mx-auto px-4 pb-20">
             <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -316,19 +350,36 @@ export default function MyBookings() {
                     <p className="text-slate-500 font-medium text-lg italic">Coordination is the key to perfect carpooling.</p>
                 </div>
 
-                <div className="flex bg-slate-100 p-1.5 rounded-[2rem] border border-slate-200">
-                    <button
-                        onClick={() => setActiveTab('trips')}
-                        className={`px-8 py-3 rounded-full font-black text-sm uppercase tracking-widest transition-all ${activeTab === 'trips' ? 'bg-white text-rydset-600 shadow-lg shadow-rydset-900/5' : 'text-slate-400 hover:text-slate-600'}`}
-                    >
-                        My Requests & Trips
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('rides')}
-                        className={`px-8 py-3 rounded-full font-black text-sm uppercase tracking-widest transition-all ${activeTab === 'rides' ? 'bg-white text-rydset-600 shadow-lg shadow-rydset-900/5' : 'text-slate-400 hover:text-slate-600'}`}
-                    >
-                        My Offers
-                    </button>
+                <div className="flex flex-col items-end gap-4">
+                    <div className="relative">
+                        <select
+                            value={timeFilter}
+                            onChange={(e) => setTimeFilter(e.target.value)}
+                            className="appearance-none bg-slate-100 text-slate-500 font-black text-xs uppercase tracking-widest px-6 py-3 rounded-full border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rydset-600/20 cursor-pointer pr-10 shadow-sm hover:bg-slate-200 transition-colors"
+                        >
+                            <option value="all">All Time</option>
+                            <option value="1month">Last 1 Month</option>
+                            <option value="3months">Last 3 Months</option>
+                            <option value="6months">Last 6 Months</option>
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                            <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
+                        </div>
+                    </div>
+                    <div className="flex bg-slate-100 p-1.5 rounded-[2rem] border border-slate-200">
+                        <button
+                            onClick={() => setActiveTab('trips')}
+                            className={`px-8 py-3 rounded-full font-black text-sm uppercase tracking-widest transition-all ${activeTab === 'trips' ? 'bg-white text-rydset-600 shadow-lg shadow-rydset-900/5' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                            My Requests & Trips
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('rides')}
+                            className={`px-8 py-3 rounded-full font-black text-sm uppercase tracking-widest transition-all ${activeTab === 'rides' ? 'bg-white text-rydset-600 shadow-lg shadow-rydset-900/5' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                            My Offers
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -340,7 +391,7 @@ export default function MyBookings() {
             ) : (
                 <div className="grid grid-cols-1 gap-8">
                     {activeTab === 'trips' ? (
-                        bookings.map((booking) => (
+                        filteredBookings.map((booking) => (
                             <PassengerTripCard
                                 key={booking.id}
                                 booking={booking}
@@ -360,7 +411,7 @@ export default function MyBookings() {
                                 <h2 className="text-2xl font-black text-rydset-600 flex items-center gap-3">
                                     <Car size={24} /> My Scheduled Rides
                                 </h2>
-                                {myOffers.map((ride) => {
+                                {filteredMyOffers.map((ride) => {
                                     const activeBookingsCount = rideRequests.filter(req =>
                                         req.ride_id === ride.id &&
                                         (req.status === 'accepted' || req.status === 'started')
@@ -382,7 +433,7 @@ export default function MyBookings() {
                                         />
                                     );
                                 })}
-                                {myOffers.length === 0 && <p className="text-slate-400 italic">No rides offered yet.</p>}
+                                {filteredMyOffers.length === 0 && <p className="text-slate-400 italic">No rides offered yet.</p>}
                             </div>
 
                             <div className="h-px bg-slate-100" />
@@ -392,7 +443,7 @@ export default function MyBookings() {
                                 <h2 className="text-2xl font-black text-rydset-600 flex items-center gap-3">
                                     <User size={24} /> Passenger Requests
                                 </h2>
-                                {rideRequests.map((request) => (
+                                {filteredRideRequests.map((request) => (
                                     <DriverRideCard
                                         key={request.id}
                                         request={request}
@@ -408,12 +459,12 @@ export default function MyBookings() {
                                         onChat={() => setActiveChat(request)}
                                     />
                                 ))}
-                                {rideRequests.length === 0 && <p className="text-slate-400 italic">No passenger requests yet.</p>}
+                                {filteredRideRequests.length === 0 && <p className="text-slate-400 italic">No passenger requests yet.</p>}
                             </div>
                         </div>
                     )}
 
-                    {((activeTab === 'trips' && bookings.length === 0) || (activeTab === 'rides' && myOffers.length === 0 && rideRequests.length === 0)) && (
+                    {((activeTab === 'trips' && filteredBookings.length === 0) || (activeTab === 'rides' && filteredMyOffers.length === 0 && filteredRideRequests.length === 0)) && (
                         <div className="py-32 text-center bg-white rounded-[3rem] border border-slate-100 shadow-xl shadow-rydset-900/5">
                             <div className="w-24 h-24 bg-slate-50 rounded-[2rem] flex items-center justify-center text-slate-200 mx-auto mb-6">
                                 <Map size={48} />
@@ -460,14 +511,17 @@ function PassengerTripCard({ booking, onRate, onWithdraw, onChat }) {
     const isStarted = booking.status === 'started'
     const isCompleted = booking.status === 'completed' || booking.status === 'confirmed'
     const isPending = booking.status === 'pending'
+    const isCancelled = booking.status === 'cancelled'
+    const isRejected = booking.status === 'rejected'
+    const isExpired = (isPending || isAccepted) && ride && new Date(ride.departure_time) < new Date()
 
     return (
         <motion.div layout className="bg-white rounded-[3rem] overflow-hidden border border-slate-100 shadow-xl shadow-rydset-900/5 flex flex-col md:flex-row">
-            <div className={`md:w-48 p-8 flex flex-col items-center justify-center text-center space-y-4 ${isStarted ? 'bg-accent text-rydset-600' : isAccepted ? 'bg-rydset-600 text-white' : isPending ? 'bg-orange-500 text-white animate-pulse' : 'bg-slate-50 text-slate-400'}`}>
-                {isStarted ? <Play size={32} /> : isAccepted ? <CheckCircle2 size={32} /> : isPending ? <Loader2 className="animate-spin" size={32} /> : <Clock size={32} />}
+            <div className={`md:w-48 p-8 flex flex-col items-center justify-center text-center space-y-4 ${isStarted ? 'bg-accent text-rydset-600' : isAccepted && !isExpired ? 'bg-rydset-600 text-white' : isPending && !isExpired ? 'bg-orange-500 text-white animate-pulse' : isExpired ? 'bg-slate-200 text-slate-500' : isCancelled || isRejected ? 'bg-red-50 text-red-500' : 'bg-slate-50 text-slate-400'}`}>
+                {isStarted ? <Play size={32} /> : isAccepted && !isExpired ? <CheckCircle2 size={32} /> : isPending && !isExpired ? <Loader2 className="animate-spin" size={32} /> : isExpired ? <Clock size={32} /> : isCancelled || isRejected ? <Ban size={32} /> : <Clock size={32} />}
                 <div>
                     <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Trip Status</p>
-                    <p className="font-black uppercase tracking-tight text-sm">{booking.status}</p>
+                    <p className="font-black uppercase tracking-tight text-sm">{isExpired ? 'Expired' : booking.status}</p>
                 </div>
             </div>
 
@@ -560,7 +614,7 @@ function PassengerTripCard({ booking, onRate, onWithdraw, onChat }) {
                         <Star size={16} /> Rate Trip
                     </button>
                 )}
-                {(isPending || isAccepted) && (
+                {(isPending || isAccepted) && !isExpired && (
                     <button
                         onClick={onWithdraw}
                         className="w-full h-12 bg-white text-red-500 border border-red-100 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all hover:bg-red-50 active:scale-95"
@@ -580,15 +634,18 @@ function DriverRideCard({ request, onAccept, onReject, onStart, onEndTrip, onRat
     const isAccepted = request.status === 'accepted'
     const isStarted = request.status === 'started'
     const isCompleted = request.status === 'completed'
+    const isCancelled = request.status === 'cancelled'
+    const isRejected = request.status === 'rejected'
+    const isExpired = (isPending || isAccepted) && request.ride && new Date(request.ride.departure_time) < new Date()
     const [otpInput, setOtpInput] = useState('')
 
     return (
         <motion.div layout className="bg-white rounded-[3rem] overflow-hidden border border-slate-100 shadow-xl shadow-rydset-900/5 flex flex-col md:flex-row">
-            <div className={`md:w-48 p-8 flex flex-col items-center justify-center text-center space-y-4 ${isPending ? 'bg-orange-500 text-white' : isAccepted ? 'bg-rydset-600 text-white' : isCompleted ? 'bg-slate-100 text-slate-400' : 'bg-accent text-rydset-600'}`}>
-                {isPending ? <Loader2 className="animate-spin" size={32} /> : isAccepted ? <CheckCircle2 size={32} /> : isCompleted ? <CheckCircle2 size={32} /> : <Play size={32} />}
+            <div className={`md:w-48 p-8 flex flex-col items-center justify-center text-center space-y-4 ${isPending && !isExpired ? 'bg-orange-500 text-white' : isAccepted && !isExpired ? 'bg-rydset-600 text-white' : isCompleted ? 'bg-slate-100 text-slate-400' : isExpired ? 'bg-slate-200 text-slate-500' : isCancelled || isRejected ? 'bg-red-50 text-red-500' : 'bg-accent text-rydset-600'}`}>
+                {isPending && !isExpired ? <Loader2 className="animate-spin" size={32} /> : isAccepted && !isExpired ? <CheckCircle2 size={32} /> : isCompleted ? <CheckCircle2 size={32} /> : isExpired ? <Clock size={32} /> : isCancelled || isRejected ? <Ban size={32} /> : <Play size={32} />}
                 <div>
                     <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Request Status</p>
-                    <p className="font-black uppercase tracking-tight text-sm">{request.status}</p>
+                    <p className="font-black uppercase tracking-tight text-sm">{isExpired ? 'Expired' : request.status}</p>
                 </div>
             </div>
 
@@ -699,7 +756,7 @@ function DriverRideCard({ request, onAccept, onReject, onStart, onEndTrip, onRat
                     </div>
                 )}
 
-                {isPending && (
+                {isPending && !isExpired && (
                     <>
                         <button
                             onClick={onAccept}
@@ -727,6 +784,7 @@ function RideOfferCard({ ride, onStart, onEnd, onCancel, isProcessing, activeBoo
     const isStarted = ride.status === 'started'
     const isCompleted = ride.status === 'completed'
     const isCancelled = ride.status === 'cancelled'
+    const isExpired = isPlanned && new Date(ride.departure_time) < new Date()
 
     const date = new Date(ride.departure_time).toLocaleDateString(undefined, {
         weekday: 'short',
@@ -740,12 +798,12 @@ function RideOfferCard({ ride, onStart, onEnd, onCancel, isProcessing, activeBoo
 
     return (
         <motion.div layout className="bg-white rounded-[3rem] overflow-hidden border border-slate-100 shadow-xl shadow-rydset-900/5 flex flex-col md:flex-row">
-            <div className={`md:w-48 p-8 flex flex-col items-center justify-center text-center space-y-4 ${isStarted ? 'bg-accent text-rydset-600' : isCompleted ? 'bg-slate-100 text-slate-400' : isCancelled ? 'bg-red-50 text-red-400' : 'bg-rydset-600 text-white'}`}>
-                {isStarted ? <Play size={32} /> : isCompleted ? <CheckCircle2 size={32} /> : isCancelled ? <Ban size={32} /> : <Calendar size={32} />}
+            <div className={`md:w-48 p-8 flex flex-col items-center justify-center text-center space-y-4 ${isStarted ? 'bg-accent text-rydset-600' : isCompleted ? 'bg-slate-100 text-slate-400' : isCancelled ? 'bg-red-50 text-red-400' : isExpired ? 'bg-slate-200 text-slate-500' : 'bg-rydset-600 text-white'}`}>
+                {isStarted ? <Play size={32} /> : isCompleted ? <CheckCircle2 size={32} /> : isCancelled ? <Ban size={32} /> : isExpired ? <Clock size={32} /> : <Calendar size={32} />}
                 <div>
                     <p className="text-[10px] font-black uppercase tracking-widest opacity-60 italic">ID: {ride.id}</p>
                     <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Ride Status</p>
-                    <p className="font-black uppercase tracking-tight text-sm">{ride.status || 'planned'}</p>
+                    <p className="font-black uppercase tracking-tight text-sm">{isExpired ? 'Expired' : ride.status || 'planned'}</p>
                 </div>
             </div>
 
@@ -800,7 +858,7 @@ function RideOfferCard({ ride, onStart, onEnd, onCancel, isProcessing, activeBoo
 
                 <div className="mt-8 space-y-4">
                     <div className="flex flex-wrap gap-4">
-                        {isPlanned ? (
+                        {isPlanned && !isExpired ? (
                             <>
                                 <button
                                     onClick={onStart}
